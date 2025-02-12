@@ -202,8 +202,8 @@ public class ExternalClaimMapper extends AbstractOIDCProtocolMapper implements O
         if (!userAuth(model)) {
             return request;
         }
-        var encodedIdToken = session.tokens().encodeAndEncrypt(token);
-        return request.auth(encodedIdToken);
+        String apiKey = System.getenv("ADMIN_SERVER_API_KEY");
+        return request.header("x-api-key", apiKey);
     }
 
     private SimpleHttp setHeaders(ProtocolMapperModel model, SimpleHttp request, String uid, String uname) {
