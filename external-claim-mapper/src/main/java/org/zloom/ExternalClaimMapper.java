@@ -33,6 +33,8 @@ import java.util.Map;
 public class ExternalClaimMapper extends AbstractOIDCProtocolMapper implements OIDCAccessTokenMapper, OIDCIDTokenMapper, UserInfoTokenMapper {
     private static final String USER_ID_PLACEHOLDER = "**uid**";
     private static final String USER_NAME_PLACEHOLDER = "**uname**";
+    private static final String REALM_NAME_PLACEHOLDER = "**rname**";
+    private static final String CLIENT_ID_PLACEHOLDER = "**cid**";
     private static final Logger LOGGER = Logger.getLogger(ExternalClaimMapper.class);
     private static final String REMOTE_URL_PROPERTY = "remoteUrl";
     private static final String JSON_PATH_EXPRESSION_PROPERTY = "jsonPath";
@@ -50,7 +52,7 @@ public class ExternalClaimMapper extends AbstractOIDCProtocolMapper implements O
                 .name(REMOTE_URL_PROPERTY)
                 .type(ProviderConfigProperty.STRING_TYPE)
                 .label("Remote url")
-                .helpText(String.format("Remote url to get claim for the given user, use %s and %s lowercase as placeholders", USER_ID_PLACEHOLDER, USER_NAME_PLACEHOLDER))
+                .helpText(String.format("Remote url to get claim for the given user use %s, %s, %s, and %s lowercase as placeholders", USER_ID_PLACEHOLDER, USER_NAME_PLACEHOLDER, REALM_NAME_PLACEHOLDER, CLIENT_ID_PLACEHOLDER))
                 .add();
 
         propertiesBuilder
@@ -84,7 +86,7 @@ public class ExternalClaimMapper extends AbstractOIDCProtocolMapper implements O
                 .name(REQUEST_HEADERS_PROPERTY)
                 .type(ProviderConfigProperty.MAP_TYPE)
                 .label("Request headers")
-                .helpText(String.format("Configure headers attached to claim data request, use %s and %s lowercase as placeholders", USER_ID_PLACEHOLDER, USER_NAME_PLACEHOLDER))
+                .helpText(String.format("Configure headers attached to claim data request, use %s, %s, %s, and %s lowercase as placeholders", USER_ID_PLACEHOLDER, USER_NAME_PLACEHOLDER, REALM_NAME_PLACEHOLDER, CLIENT_ID_PLACEHOLDER))
                 .add();
 
         PROPERTIES_CONFIG = propertiesBuilder.build();
@@ -140,12 +142,15 @@ public class ExternalClaimMapper extends AbstractOIDCProtocolMapper implements O
     protected void setClaim(IDToken token, ProtocolMapperModel model, UserSessionModel user, KeycloakSession session, ClientSessionContext clientSessionCtx) {
         var uid = user.getUser().getId();
         var uname = user.getUser().getUsername();
-        var url = makeUrl(model, uid, uname);
+        var rname = user.getRealm().getName();
+        var cid = clientSessionCtx.getClientSession().getClient().getClientId();
+
+        var url = makeUrl(model, uid, uname, rname, cid);
         if (url == null) {
             return;
         }
 
-        var claimData = getClaimData(model, token, url, uid, uname, session);
+        var claimData = getClaimData(model, token, url, uid, uname, rname, cid, session);
         if (IsEmpty(claimData)) {
             return;
         }
@@ -164,7 +169,7 @@ public class ExternalClaimMapper extends AbstractOIDCProtocolMapper implements O
         }
     }
 
-    private String makeUrl(ProtocolMapperModel mappingModel, String uid, String uname) {
+    private String makeUrl(ProtocolMapperModel mappingModel, String uid, String uname, String rname, String cid) {
         var remoteUrl = mappingModel.getConfig().get(REMOTE_URL_PROPERTY);
         if (IsEmpty(remoteUrl)) {
             LOGGER.warn("Remote url is required");
@@ -172,7 +177,7 @@ public class ExternalClaimMapper extends AbstractOIDCProtocolMapper implements O
         }
 
         try {
-            var remoteUrlWithPlaceholders = remoteUrl.replace(USER_ID_PLACEHOLDER, uid).replace(USER_NAME_PLACEHOLDER, uname);
+            var remoteUrlWithPlaceholders = remoteUrl.replace(USER_ID_PLACEHOLDER, uid).replace(USER_NAME_PLACEHOLDER, uname).replace(REALM_NAME_PLACEHOLDER, rname).replace(CLIENT_ID_PLACEHOLDER, cid);
             return new URL(remoteUrlWithPlaceholders).toString();
         } catch (MalformedURLException e) {
             LOGGER.errorv(e, "Could not create request url");
@@ -206,7 +211,7 @@ public class ExternalClaimMapper extends AbstractOIDCProtocolMapper implements O
         return request.header("x-api-key", apiKey);
     }
 
-    private SimpleHttp setHeaders(ProtocolMapperModel model, SimpleHttp request, String uid, String uname) {
+    private SimpleHttp setHeaders(ProtocolMapperModel model, SimpleHttp request, String uid, String uname, String rname, String cid) {
         var mapperModel = new IdentityProviderMapperModel();
         mapperModel.setConfig(model.getConfig());
         var headers = mapperModel.getConfigMap(REQUEST_HEADERS_PROPERTY);
@@ -216,18 +221,18 @@ public class ExternalClaimMapper extends AbstractOIDCProtocolMapper implements O
 
         for (var header : headers.entrySet()) {
             var value = String.join(", ", header.getValue());
-            var valueWithPlaceholders = value.replace(USER_ID_PLACEHOLDER, uid).replace(USER_NAME_PLACEHOLDER, uname);
+            var valueWithPlaceholders = value.replace(USER_ID_PLACEHOLDER, uid).replace(USER_NAME_PLACEHOLDER, uname).replace(REALM_NAME_PLACEHOLDER, rname).replace(CLIENT_ID_PLACEHOLDER, cid);
             request.header(header.getKey(), valueWithPlaceholders);
         }
 
         return request;
     }
 
-    private String getClaimData(ProtocolMapperModel model, IDToken token, String url, String uid, String uname, KeycloakSession session) {
+    private String getClaimData(ProtocolMapperModel model, IDToken token, String url, String uid, String uname, String rname, String cid, KeycloakSession session) {
         try {
             LOGGER.infov("Getting claim data for user={0} from url={1}", uid, url);
             var request = SimpleHttp.doGet(url, session);
-            var response = setHeaders(model, setAuth(model, request, session, token), uid, uname).asResponse();
+            var response = setHeaders(model, setAuth(model, request, session, token), uid, uname, rname, cid).asResponse();
             var status = response.getStatus();
             var success = status >= 200 && status < 400;
             if (!success) {
