@@ -6,28 +6,19 @@ import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.spi.json.JacksonJsonProvider;
 import com.jayway.jsonpath.spi.mapper.JacksonMappingProvider;
 import org.apache.http.client.HttpResponseException;
+import org.jboss.logging.Logger;
 import org.keycloak.broker.provider.util.SimpleHttp;
-import org.keycloak.models.ClientSessionContext;
-import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.ProtocolMapperModel;
-import org.keycloak.models.UserSessionModel;
+import org.keycloak.models.*;
 import org.keycloak.protocol.ProtocolMapper;
-import org.keycloak.protocol.oidc.mappers.AbstractOIDCProtocolMapper;
-import org.keycloak.protocol.oidc.mappers.OIDCAccessTokenMapper;
-import org.keycloak.protocol.oidc.mappers.OIDCAttributeMapperHelper;
-import org.keycloak.protocol.oidc.mappers.OIDCIDTokenMapper;
-import org.keycloak.protocol.oidc.mappers.UserInfoTokenMapper;
+import org.keycloak.protocol.oidc.mappers.*;
 import org.keycloak.provider.ProviderConfigProperty;
 import org.keycloak.provider.ProviderConfigurationBuilder;
-import org.keycloak.models.IdentityProviderMapperModel;
 import org.keycloak.representations.IDToken;
-import org.jboss.logging.Logger;
 import org.keycloak.util.JsonSerialization;
 
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.List;
-import java.util.Map;
 
 @AutoService(ProtocolMapper.class)
 public class ExternalClaimMapper extends AbstractOIDCProtocolMapper implements OIDCAccessTokenMapper, OIDCIDTokenMapper, UserInfoTokenMapper {
@@ -123,7 +114,9 @@ public class ExternalClaimMapper extends AbstractOIDCProtocolMapper implements O
     }
 
     @Override
-    public int getPriority() { return 100; }
+    public int getPriority() {
+        return 100;
+    }
 
     @Override
     public List<ProviderConfigProperty> getConfigProperties() {
@@ -150,7 +143,7 @@ public class ExternalClaimMapper extends AbstractOIDCProtocolMapper implements O
             return;
         }
 
-        var claimData = getClaimData(model, token, url, uid, uname, rname, cid, session);
+        var claimData = getClaimData(model, token, url, uid, uname, rname, cid, session, user.getUser());
         if (IsEmpty(claimData)) {
             return;
         }
@@ -228,10 +221,11 @@ public class ExternalClaimMapper extends AbstractOIDCProtocolMapper implements O
         return request;
     }
 
-    private String getClaimData(ProtocolMapperModel model, IDToken token, String url, String uid, String uname, String rname, String cid, KeycloakSession session) {
+    private String getClaimData(ProtocolMapperModel model, IDToken token, String url, String uid, String uname, String rname, String cid, KeycloakSession session, UserModel userObject) {
         try {
             LOGGER.infov("Getting claim data for user={0} from url={1}", uid, url);
-            var request = SimpleHttp.doGet(url, session);
+            var request = SimpleHttp.doPost(url, session);
+            request.json(userObject.getAttributes());
             var response = setHeaders(model, setAuth(model, request, session, token), uid, uname, rname, cid).asResponse();
             var status = response.getStatus();
             var success = status >= 200 && status < 400;
