@@ -23,6 +23,7 @@ import java.util.List;
 @AutoService(ProtocolMapper.class)
 public class ExternalClaimMapper extends AbstractOIDCProtocolMapper implements OIDCAccessTokenMapper, OIDCIDTokenMapper, UserInfoTokenMapper {
     private static final String USER_ID_PLACEHOLDER = "**uid**";
+    private static final String BASE_URL_PLACEHOLDER = "**burl**";
     private static final String USER_NAME_PLACEHOLDER = "**uname**";
     private static final String REALM_NAME_PLACEHOLDER = "**rname**";
     private static final String CLIENT_ID_PLACEHOLDER = "**cid**";
@@ -77,7 +78,7 @@ public class ExternalClaimMapper extends AbstractOIDCProtocolMapper implements O
                 .name(REQUEST_HEADERS_PROPERTY)
                 .type(ProviderConfigProperty.MAP_TYPE)
                 .label("Request headers")
-                .helpText(String.format("Configure headers attached to claim data request, use %s, %s, %s, and %s lowercase as placeholders", USER_ID_PLACEHOLDER, USER_NAME_PLACEHOLDER, REALM_NAME_PLACEHOLDER, CLIENT_ID_PLACEHOLDER))
+                .helpText(String.format("Configure headers attached to claim data request, use %s, %s, %s, %s, and %s lowercase as placeholders", USER_ID_PLACEHOLDER, USER_NAME_PLACEHOLDER, REALM_NAME_PLACEHOLDER, CLIENT_ID_PLACEHOLDER, BASE_URL_PLACEHOLDER))
                 .add();
 
         PROPERTIES_CONFIG = propertiesBuilder.build();
@@ -170,7 +171,8 @@ public class ExternalClaimMapper extends AbstractOIDCProtocolMapper implements O
         }
 
         try {
-            var remoteUrlWithPlaceholders = remoteUrl.replace(USER_ID_PLACEHOLDER, uid).replace(USER_NAME_PLACEHOLDER, uname).replace(REALM_NAME_PLACEHOLDER, rname).replace(CLIENT_ID_PLACEHOLDER, cid);
+            var baseUrl = System.getenv("ADMIN_SERVER_BASE_URL");
+            var remoteUrlWithPlaceholders = remoteUrl.replace(USER_ID_PLACEHOLDER, uid).replace(USER_NAME_PLACEHOLDER, uname).replace(REALM_NAME_PLACEHOLDER, rname).replace(CLIENT_ID_PLACEHOLDER, cid).replace(BASE_URL_PLACEHOLDER, baseUrl);
             return new URL(remoteUrlWithPlaceholders).toString();
         } catch (MalformedURLException e) {
             LOGGER.errorv(e, "Could not create request url");
